@@ -1,0 +1,39 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e5b4d093816c4dddae6a5e36ef4d8f17, type: 3}
+  m_Name: BattleSettings
+  m_EditorClassIdentifier:
+  width: 32
+  height: 32
+  seed: 42
+  obstacleDensity: 0.12
+  playerHP: 30
+  playerDamage: 10
+  playerAP: 8
+  enemyHP: 15
+  enemyDamage: 10
+  enemyAP: 8
+  shieldHP: 60
+  shieldDamage: 10
+  shieldAP: 8
+  archerHP: 15
+  archerDamage: 10
+  archerAP: 8
+  archerMinRange: 2
+  archerMaxRange: 4
+  vision: 5
+  moveCost: 1
+  climbExtra: 1
+  swampMultiplier: 2
+  attackCost: 4
+  actionDelay: 0.18
+
