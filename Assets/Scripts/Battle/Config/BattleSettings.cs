@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 
 // Все изменяемые числа находятся здесь. Настраивайте asset через Inspector.
 [CreateAssetMenu(fileName = "BattleSettings", menuName = "Пепельная клятва/Настройки боя")]
@@ -35,6 +35,13 @@ public class BattleSettings : ScriptableObject
     [InspectorName("ОД за атаку"), Min(1)] public int attackCost = 4;
     [Header("Отображение")]
     [InspectorName("Пауза между действиями, сек"), Range(.05f, 1)] public float actionDelay = .18f;
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+    [Header("Меню тестирования")]
+    [InspectorName("Гексы, разрешённые для удаления")]
+    [Tooltip("Координаты стартового препятствия или врага. Враг остаётся разрешённым после перемещения. Союзников удалять нельзя.")]
+    public Vector2Int[] testRemovableCells = System.Array.Empty<Vector2Int>();
+#endif
 
     public BattleRules Rules()
     {

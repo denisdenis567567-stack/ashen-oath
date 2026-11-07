@@ -1,10 +1,10 @@
-﻿using System.Collections;
+using System.Collections;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using AshenOath;
 
 // Управление сценой и ввод. Правила находятся в BattleModel.
-public class BattlePrototype : MonoBehaviour
+public partial class BattlePrototype : MonoBehaviour
 {
     public const string ScenePath = "Assets/Scenes/TestBattle.unity";
     private bool leavingBattle;
@@ -59,16 +59,19 @@ public class BattlePrototype : MonoBehaviour
                 System.Array.Copy(previous.Allies[i].Inventory.Bag, inventory.Bag, inventory.Bag.Length);
             }
         }
-        view.Build(Battle); Refresh(); FocusPlayer();
+        view.Build(Battle);
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        ResetTestTools();
+#endif
+        Refresh(); FocusPlayer();
     }
     private void Update()
     {
         if (Battle == null) return;
         if (screenWidth != Screen.width || screenHeight != Screen.height)
         { screenWidth = Screen.width; screenHeight = Screen.height; BattleCamera.rect = new Rect(0, .25f, 1, .55f); }
-        if (Battle.Finished) return;
         var keyboard = Keyboard.current;
-        if (keyboard != null && keyboard.tabKey.wasPressedThisFrame)
+        if (!TestToolsActive && keyboard != null && keyboard.tabKey.wasPressedThisFrame)
         { SetInventoryOpen(!InventoryOpen); return; }
         if (InventoryOpen)
         {
@@ -76,9 +79,13 @@ public class BattlePrototype : MonoBehaviour
             return;
         }
         if (inventoryClosedFrame == Time.frameCount) return;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        if (HandleTestInput(keyboard, Mouse.current)) return;
+#endif
+        if (keyboard != null && keyboard.rKey.wasPressedThisFrame) Restart();
+        if (Battle.Finished) return;
         if (keyboard != null)
         {
-            if (keyboard.rKey.wasPressedThisFrame) Restart();
             if (keyboard.fKey.wasPressedThisFrame) FocusPlayer();
             if (keyboard.gKey.wasPressedThisFrame) Overview();
             if (keyboard.spaceKey.wasPressedThisFrame) EndTurn();
@@ -87,13 +94,7 @@ public class BattlePrototype : MonoBehaviour
         }
         var mouse = Mouse.current;
         if (mouse == null) return;
-        Vector2 screen = mouse.position.ReadValue(); Hex? hovered = null;
-        if (BattleCamera.pixelRect.Contains(screen) && !CameraInput.IsOverSettings(screen))
-        {
-            Vector3 world = BattleCamera.ScreenToWorldPoint(new Vector3(screen.x, screen.y, 10));
-            Hex cell = BattleBoardView.FromWorld(world);
-            if (Battle.Inside(cell) && Battle.Tile(cell).Visible) hovered = cell;
-        }
+        Hex? hovered = VisibleHexAt(mouse.position.ReadValue());
         if (Hovered != hovered) { Hovered = hovered; view.Refresh(Battle, Reachable, MovingMode && CanAct, Hovered, !MovingMode && CanAct); }
         if (!mouse.leftButton.wasPressedThisFrame || !hovered.HasValue || Busy) return;
         var clicked = Battle.UnitAt(hovered.Value);
@@ -119,7 +120,15 @@ public class BattlePrototype : MonoBehaviour
         WorldMap.ReturnFromBattle();
     }
 
-    public bool CanAct { get { return Battle != null && Battle.CanUse(Battle.Player) && !Busy && !InventoryOpen && inventoryClosedFrame != Time.frameCount; } }
+    private Hex? VisibleHexAt(Vector2 screen)
+    {
+        if (!BattleCamera.pixelRect.Contains(screen) || CameraInput.IsOverSettings(screen)) return null;
+        Vector3 world = BattleCamera.ScreenToWorldPoint(new Vector3(screen.x, screen.y, 10));
+        Hex cell = BattleBoardView.FromWorld(world);
+        return Battle.Inside(cell) && Battle.Tile(cell).Visible ? cell : (Hex?)null;
+    }
+
+    public bool CanAct { get { return Battle != null && Battle.CanUse(Battle.Player) && !Busy && !InventoryOpen && !TestToolsActive && inventoryClosedFrame != Time.frameCount; } }
     public bool RenameCharacter(string name)
     {
         if (!Character.Rename(name)) return false;
@@ -128,6 +137,7 @@ public class BattlePrototype : MonoBehaviour
     }
     public void SetInventoryOpen(bool open)
     {
+        if (open && TestToolsActive) return;
         InventoryOpen = open;
         if (!open) inventoryClosedFrame = Time.frameCount;
         Hovered = null;
@@ -135,7 +145,7 @@ public class BattlePrototype : MonoBehaviour
     }
     public void SelectUnit(BattleUnit unit)
     {
-        if (Busy || !Battle.SelectPlayer(unit)) return;
+        if (Busy || TestToolsActive || !Battle.SelectPlayer(unit)) return;
         Hovered = null; MovingMode = true;
         Battle.Message = unit.Inventory.Name + (unit.Alive ? unit.TurnEnded ? ": ход завершён." : ": выберите действие." : ": погиб.");
         Refresh();
@@ -162,7 +172,7 @@ public class BattlePrototype : MonoBehaviour
         if (!Battle.PlayerTurn) StartCoroutine(EnemyTurn());
     }
     public void EndSquadTurn()
-    { if (!Busy && !InventoryOpen && Battle.PlayerTurn && !Battle.Finished) { Battle.BeginEnemyTurn(); StartCoroutine(EnemyTurn()); } }
+    { if (!Busy && !InventoryOpen && !TestToolsActive && Battle.PlayerTurn && !Battle.Finished) { Battle.BeginEnemyTurn(); StartCoroutine(EnemyTurn()); } }
     private IEnumerator EnemyTurn()
     {
         Busy = true; Battle.BeginEnemyTurn(); Refresh();
@@ -191,7 +201,7 @@ public class BattlePrototype : MonoBehaviour
     public void Refresh()
     {
         Reachable = Battle.Paths(Battle.Player, true);
-        view.Refresh(Battle, Reachable, MovingMode && Battle.CanUse(Battle.Player) && !Busy && !InventoryOpen, Hovered, !MovingMode && Battle.CanUse(Battle.Player) && !Busy && !InventoryOpen);
+        view.Refresh(Battle, Reachable, MovingMode && Battle.CanUse(Battle.Player) && !Busy && !InventoryOpen && !TestToolsActive, Hovered, !MovingMode && Battle.CanUse(Battle.Player) && !Busy && !InventoryOpen && !TestToolsActive);
     }
     public void FocusPlayer()
     {
@@ -206,6 +216,9 @@ public class BattlePrototype : MonoBehaviour
         BattleCamera.transform.position = new Vector3(p.x, p.y, -10);
         BattleCamera.orthographicSize = Mathf.Max(Battle.Rules.Height * .78f, Battle.Rules.Width * .9f / BattleCamera.aspect);
     }
+#if !UNITY_EDITOR && !DEVELOPMENT_BUILD
+    public bool TestToolsActive => false;
+#endif
     private void OnDestroy() { if (ownsSettings && settings != null) Destroy(settings); }
 }
 

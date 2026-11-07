@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using UnityEngine;
 using AshenOath;
 
@@ -77,13 +77,37 @@ public class BattleBoardView : MonoBehaviour
             highlights[x, y] = Make("Movement overlay", hex, p, .87f, 1);
             details[x, y] = Make("Terrain / obstacle", hill, p, .7f, 2);
         }
-        foreach (var unit in battle.Units)
-        {
-            var renderer = Make(unit.Inventory.Name, unit.Role == UnitRole.Shield ? shield : unit.Role == UnitRole.Archer ? archer : soldier, World(unit.Position), .8f, 4);
-            renderer.color = unit.IsEnemy ? new Color(.95f, .35f, .25f) : new Color(.4f, .83f, .95f);
-            units.Add(unit, renderer);
-        }
+        foreach (var unit in battle.Units) AddUnit(unit);
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        testHighlight = Make("Test target", hex, Vector3.zero, .92f, 3);
+        testHighlight.enabled = false;
+#endif
     }
+    private void AddUnit(BattleUnit unit)
+    {
+        var renderer = Make(unit.Inventory.Name, unit.Role == UnitRole.Shield ? shield : unit.Role == UnitRole.Archer ? archer : soldier, World(unit.Position), .8f, 4);
+        units.Add(unit, renderer);
+    }
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+    private SpriteRenderer testHighlight;
+    public void AddTestUnit(BattleUnit unit) { AddUnit(unit); }
+    public void RemoveTestUnit(BattleUnit unit)
+    {
+        if (!units.TryGetValue(unit, out var renderer)) return;
+        units.Remove(unit);
+        renderer.enabled = false;
+        Destroy(renderer.gameObject);
+    }
+    public void ShowTestTarget(Hex? position, Color color)
+    {
+        if (testHighlight == null) return;
+        testHighlight.enabled = position.HasValue;
+        if (!position.HasValue) return;
+        testHighlight.transform.localPosition = World(position.Value);
+        testHighlight.color = color;
+    }
+#endif
     public void Refresh(BattleModel battle, BattlePaths paths, bool moveMode, Hex? hovered, bool attackMode = false)
     {
         var preview = new HashSet<Hex>();

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using AshenOath;
 
@@ -58,7 +58,7 @@ public class BattleModel
     public readonly List<BattleUnit> Allies = new List<BattleUnit>();
     public readonly List<BattleUnit> Enemies = new List<BattleUnit>();
     public BattleUnit Player { get; private set; }
-    public BattleUnit Enemy { get { return Enemies[0]; } }
+    public BattleUnit Enemy { get { return Enemies.Count == 0 ? null : Enemies[0]; } }
     public BattleUnit ActiveEnemy { get; private set; }
     public IEnumerable<BattleUnit> Units { get { foreach (var u in Allies) yield return u; foreach (var u in Enemies) yield return u; } }
     public bool AlliesAlive { get { return Allies.Exists(u => u.Alive); } }
@@ -76,12 +76,48 @@ public class BattleModel
         Allies.Add(CreateUnit(new Hex(x, y), UnitRole.Swordsman, false, rules.PlayerHP, rules.PlayerAP, rules.PlayerDamage));
         Allies.Add(CreateUnit(new Hex(x, y + 1), UnitRole.Shield, false, rules.ShieldHP, rules.ShieldAP, rules.ShieldDamage));
         Allies.Add(CreateUnit(new Hex(x - 1, y), UnitRole.Archer, false, rules.ArcherHP, rules.ArcherAP, rules.ArcherDamage));
-        Enemies.Add(CreateUnit(new Hex(x + 8, y), UnitRole.Swordsman, true, rules.EnemyHP, rules.EnemyAP, rules.EnemyDamage));
-        Enemies.Add(CreateUnit(new Hex(x + 9, y + 1), UnitRole.Archer, true, rules.ArcherHP, rules.ArcherAP, rules.ArcherDamage));
+        Enemies.Add(CreateEnemy(new Hex(x + 8, y), UnitRole.Swordsman));
+        Enemies.Add(CreateEnemy(new Hex(x + 9, y + 1), UnitRole.Archer));
         Player = Allies[0];
         BattleMapGenerator.Generate(this);
         UpdateVision();
     }
+    private BattleUnit CreateEnemy(Hex position, UnitRole role)
+    {
+        return role == UnitRole.Archer
+            ? CreateUnit(position, role, true, Rules.ArcherHP, Rules.ArcherAP, Rules.ArcherDamage)
+            : CreateUnit(position, role, true, Rules.EnemyHP, Rules.EnemyAP, Rules.EnemyDamage);
+    }
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+    public bool CanPlaceTestItem(Hex position)
+    {
+        return Inside(position) && Tile(position).Visible &&
+            Tile(position).Obstacle == Obstacle.None && UnitAt(position) == null;
+    }
+
+    public BattleUnit AddTestEnemy(Hex position, UnitRole role)
+    {
+        if (!PlayerTurn || !CanPlaceTestItem(position) || (role != UnitRole.Archer && role != UnitRole.Swordsman)) return null;
+        var enemy = CreateEnemy(position, role);
+        Enemies.Add(enemy);
+        return enemy;
+    }
+
+    public bool SetTestObstacle(Hex position, Obstacle obstacle)
+    {
+        if (!Inside(position) || !Tile(position).Visible) return false;
+        if (obstacle == Obstacle.None ? Tile(position).Obstacle == Obstacle.None : !CanPlaceTestItem(position)) return false;
+        Tile(position).Obstacle = obstacle;
+        return true;
+    }
+
+    public bool RemoveTestEnemy(BattleUnit enemy)
+    {
+        return PlayerTurn && enemy != null && Enemies.Remove(enemy);
+    }
+#endif
+
     private BattleUnit CreateUnit(Hex p, UnitRole role, bool enemy, int hp, int ap, int damage)
     {
         var u = new BattleUnit(p, hp, ap, damage) { Role = role, IsEnemy = enemy };
@@ -188,7 +224,7 @@ public class BattleModel
         UpdateVision(); return true;
     }
     // ИИ ищет дешёвую позицию для своего оружия; лучник вблизи сначала отходит.
-    public List<Hex> EnemyPath() { return EnemyPath(Enemy); }
+    public List<Hex> EnemyPath() { return Enemy == null ? new List<Hex>() : EnemyPath(Enemy); }
     public List<Hex> EnemyPath(BattleUnit unit)
     {
         var paths = Paths(unit, false);
