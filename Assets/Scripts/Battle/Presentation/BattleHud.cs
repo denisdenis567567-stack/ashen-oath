@@ -5,9 +5,11 @@ using AshenOath;
 public class BattleHud : MonoBehaviour
 {
     private BattlePrototype controller;
-    private GUIStyle title, text, small, button;
+    private GUIStyle title, text, small, button, resultTitle, resultText;
     private Texture2D moveIcon, attackIcon;
     private readonly Color ink = new Color(.85f, .86f, .81f);
+    private static readonly Color Panel = new Color(.065f, .075f, .085f);
+    private static readonly Color Gold = new Color(.9f, .77f, .49f);
     public void Initialize(BattlePrototype value) { controller = value; }
     private Texture2D Icon(bool attack)
     {
@@ -29,6 +31,8 @@ public class BattleHud : MonoBehaviour
         small = new GUIStyle(GUI.skin.label) { fontSize = 14, wordWrap = true };
         button = new GUIStyle(GUI.skin.button) { fontSize = 17, alignment = TextAnchor.MiddleCenter };
         title.normal.textColor = text.normal.textColor = small.normal.textColor = ink;
+        resultTitle = new GUIStyle(title) { fontSize = 36, alignment = TextAnchor.MiddleCenter };
+        resultText = new GUIStyle(text) { alignment = TextAnchor.MiddleCenter };
         moveIcon = Icon(false); attackIcon = Icon(true);
     }
     private void Fill(Rect rect, Color color)
@@ -48,8 +52,8 @@ public class BattleHud : MonoBehaviour
         Styles(); var battle = controller.Battle;
         Matrix4x4 oldMatrix = GUI.matrix;
         GUI.matrix = Matrix4x4.Scale(new Vector3(Screen.width / 1280f, Screen.height / 720f, 1));
-        Fill(new Rect(0, 0, 1280, 144), new Color(.065f, .075f, .085f));
-        Fill(new Rect(0, 540, 1280, 180), new Color(.065f, .075f, .085f));
+        Fill(new Rect(0, 0, 1280, 144), Panel);
+        Fill(new Rect(0, 540, 1280, 180), Panel);
         Fill(new Rect(0, 143, 1280, 1), new Color(.4f, .35f, .23f));
         Fill(new Rect(0, 540, 1280, 1), new Color(.4f, .35f, .23f));
         Label(20, 10, 460, "ПЕПЕЛЬНАЯ КЛЯТВА", title);
@@ -57,6 +61,12 @@ public class BattleHud : MonoBehaviour
         Stats(520, controller.Character.Name, battle.Player, new Color(.35f, .72f, .8f), true);
         Label(890, 8, 370, "ОЧЕРЕДЬ: отряд → враги", text);
         Label(890, 34, 370, "Мечник → лучник → новый раунд", small);
+        if (battle.Finished)
+        {
+            DrawResult(battle);
+            GUI.matrix = oldMatrix;
+            return;
+        }
         DrawRoster(battle);
         Label(22, 553, 720, battle.Message, small);
         GUI.enabled = controller.CanAct;
@@ -71,7 +81,12 @@ public class BattleHud : MonoBehaviour
         GUI.enabled = !controller.InventoryOpen;
         if (GUI.Button(new Rect(970, 590, 135, 29), "К бойцу [F]", small)) controller.FocusPlayer();
         if (GUI.Button(new Rect(1115, 590, 145, 29), "Вся карта [G]", small)) controller.Overview();
-        if (GUI.Button(new Rect(970, 626, 290, 26), "Начать заново [R]", small)) controller.Restart();
+        if (GUI.Button(new Rect(970, 626, 135, 26), "Начать заново [R]", small)) controller.Restart();
+        CameraControls cameraControls = controller.CameraInput.Controls;
+        GUI.backgroundColor = cameraControls.SettingsOpen ? Gold : old;
+        if (GUI.Button(new Rect(1115, 626, 145, 26), "Камера", small))
+            cameraControls.SettingsOpen = !cameraControls.SettingsOpen;
+        GUI.backgroundColor = old;
         if (GUI.Button(new Rect(750, 553, 210, 29), "Инвентарь [Tab]", small)) controller.SetInventoryOpen(true);
         GUI.Label(new Rect(750, 588, 210, 68), "Земля: " + battle.Rules.MoveCost + " ОД\nПодъём: +" + battle.Rules.ClimbExtra + " ОД\nБолото: ×" + battle.Rules.SwampMultiplier, small);
         string hover = "Наведите курсор на видимый гекс — появится описание и цена пути.";
@@ -84,10 +99,24 @@ public class BattleHud : MonoBehaviour
             else if (controller.Reachable.Cost.TryGetValue(p, out cost)) hover += " · Путь: " + cost + " ОД";
         }
         Label(20, 663, 1240, hover, small);
-        Label(20, 689, 1240, "Камера: WASD / средняя кнопка мыши / колесо   •   Обзор: " + battle.Rules.Vision + " клеток   •   Атака выбранного: " + battle.Player.MinRange + "–" + battle.Player.MaxRange + " клеток   •   ЛКМ по союзнику — выбор", small);
+        Label(20, 689, 1240, "Камера: края экрана / WASD / СКМ / колесо   •   Обзор: " + battle.Rules.Vision + " клеток   •   Атака выбранного: " + battle.Player.MinRange + "–" + battle.Player.MaxRange + " клеток   •   ЛКМ по союзнику — выбор", small);
+        if (cameraControls.SettingsOpen) cameraControls.DrawSettings(CameraController.SettingsPanel, Gold, Panel, text);
         GUI.matrix = oldMatrix;
         GUI.enabled = true;
     }
+    private void DrawResult(BattleModel battle)
+    {
+        Color accent = battle.AlliesAlive ? new Color(.93f, .77f, .42f) : new Color(.91f, .48f, .42f);
+        Fill(new Rect(0, 0, 1280, 720), new Color(.025f, .03f, .035f, .65f));
+        Fill(new Rect(400, 253, 480, 214), accent);
+        Fill(new Rect(402, 255, 476, 210), Panel);
+        resultTitle.normal.textColor = accent;
+        GUI.Label(new Rect(420, 271, 440, 57), battle.AlliesAlive ? "Победа" : "Поражение", resultTitle);
+        GUI.Label(new Rect(420, 332, 440, 30), battle.Message, resultText);
+        if (GUI.Button(new Rect(500, 386, 280, 50), "Продолжить путешествие", button))
+            controller.ContinueJourney();
+    }
+
     private void DrawRoster(BattleModel battle)
     {
         int index = 0;

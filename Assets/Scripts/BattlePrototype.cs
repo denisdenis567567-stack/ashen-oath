@@ -6,6 +6,9 @@ using AshenOath;
 // Управление сценой и ввод. Правила находятся в BattleModel.
 public class BattlePrototype : MonoBehaviour
 {
+    public const string ScenePath = "Assets/Scenes/TestBattle.unity";
+    private bool leavingBattle;
+
     [InspectorName("Настройки боя")] public BattleSettings settings;
     public BattleModel Battle { get; private set; }
     public BattlePaths Reachable { get; private set; }
@@ -13,6 +16,7 @@ public class BattlePrototype : MonoBehaviour
     public bool Busy { get; private set; }
     public Hex? Hovered { get; private set; }
     public Camera BattleCamera { get; private set; }
+    public CameraController CameraInput { get; private set; }
     public CharacterInventory Character { get { return Battle.Player.Inventory; } }
     public bool InventoryOpen { get; private set; }
     private int inventoryClosedFrame = -1;
@@ -31,7 +35,9 @@ public class BattlePrototype : MonoBehaviour
         BattleCamera.orthographic = true;
         BattleCamera.clearFlags = CameraClearFlags.SolidColor;
         BattleCamera.backgroundColor = new Color(.045f, .055f, .065f);
-        if (BattleCamera.GetComponent<CameraController>() == null) BattleCamera.gameObject.AddComponent<CameraController>();
+        CameraInput = BattleCamera.GetComponent<CameraController>();
+        if (CameraInput == null) CameraInput = BattleCamera.gameObject.AddComponent<CameraController>();
+        CameraInput.Initialize(this);
         view = gameObject.AddComponent<BattleBoardView>();
         gameObject.AddComponent<BattleHud>().Initialize(this);
         gameObject.AddComponent<BattleInventoryWindow>().Initialize(this);
@@ -60,6 +66,7 @@ public class BattlePrototype : MonoBehaviour
         if (Battle == null) return;
         if (screenWidth != Screen.width || screenHeight != Screen.height)
         { screenWidth = Screen.width; screenHeight = Screen.height; BattleCamera.rect = new Rect(0, .25f, 1, .55f); }
+        if (Battle.Finished) return;
         var keyboard = Keyboard.current;
         if (keyboard != null && keyboard.tabKey.wasPressedThisFrame)
         { SetInventoryOpen(!InventoryOpen); return; }
@@ -81,7 +88,7 @@ public class BattlePrototype : MonoBehaviour
         var mouse = Mouse.current;
         if (mouse == null) return;
         Vector2 screen = mouse.position.ReadValue(); Hex? hovered = null;
-        if (BattleCamera.pixelRect.Contains(screen))
+        if (BattleCamera.pixelRect.Contains(screen) && !CameraInput.IsOverSettings(screen))
         {
             Vector3 world = BattleCamera.ScreenToWorldPoint(new Vector3(screen.x, screen.y, 10));
             Hex cell = BattleBoardView.FromWorld(world);
@@ -105,6 +112,13 @@ public class BattlePrototype : MonoBehaviour
         { Battle.Message = "Клетка заблокирована или не хватает ОД."; return; }
         if (target != Battle.Player.Position) StartCoroutine(MovePlayer(target));
     }
+    public void ContinueJourney()
+    {
+        if (Battle == null || !Battle.Finished || leavingBattle) return;
+        leavingBattle = true;
+        WorldMap.ReturnFromBattle();
+    }
+
     public bool CanAct { get { return Battle != null && Battle.CanUse(Battle.Player) && !Busy && !InventoryOpen && inventoryClosedFrame != Time.frameCount; } }
     public bool RenameCharacter(string name)
     {

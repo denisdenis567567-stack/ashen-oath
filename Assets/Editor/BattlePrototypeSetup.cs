@@ -6,11 +6,13 @@ using UnityEngine.SceneManagement;
 
 public static class BattlePrototypeSetup
 {
+    private static readonly string[] ScenePaths = { WorldMap.ScenePath, BattlePrototype.ScenePath };
+
     public static void PrepareProject()
     {
         EnsureSettings();
         CreateScene();
-        EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene("Assets/Scenes/TestBattle.unity", true) };
+        EditorBuildSettings.scenes = System.Array.ConvertAll(ScenePaths, path => new EditorBuildSettingsScene(path, true));
         PlayerSettings.productName = "Ashen Oath Tactical Prototype";
         PlayerSettings.defaultScreenWidth = 1280;
         PlayerSettings.defaultScreenHeight = 720;
@@ -36,7 +38,7 @@ public static class BattlePrototypeSetup
         string output = System.IO.Path.GetFullPath("Builds/Windows/AshenOath.exe");
         System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(output));
         var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions {
-            scenes = new[] { "Assets/Scenes/TestBattle.unity" }, locationPathName = output,
+            scenes = ScenePaths, locationPathName = output,
             target = BuildTarget.StandaloneWindows64, options = BuildOptions.Development
         });
         if (report.summary.result != UnityEditor.Build.Reporting.BuildResult.Succeeded)
@@ -47,7 +49,7 @@ public static class BattlePrototypeSetup
     [MenuItem("Battle/Create Test Scene")]
     public static void CreateScene()
     {
-        const string path = "Assets/Scenes/TestBattle.unity";
+        const string path = BattlePrototype.ScenePath;
         EnsureSettings();
         if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
         if (System.IO.File.Exists(path))

@@ -1,62 +1,67 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 
+[RequireComponent(typeof(Camera))]
 public class CameraController : MonoBehaviour
 {
     [SerializeField] private float moveSpeed = 5f;
-    [SerializeField] private float zoomSpeed = 2f;
+    public static readonly Rect SettingsPanel = new Rect(930, 398, 326, 135);
+    public CameraControls Controls { get; private set; }
 
-    private Vector3 lastMousePosition;
+    private Vector2 lastMousePosition;
     private Camera targetCamera;
     private BattlePrototype battle;
 
     private void Awake()
     {
         targetCamera = GetComponent<Camera>();
+        Controls = new CameraControls(targetCamera);
     }
 
-    private void Update()
+    public void Initialize(BattlePrototype controller)
     {
-        if (battle == null) battle = FindFirstObjectByType<BattlePrototype>();
-        if (battle != null && (battle.InventoryOpen || (Keyboard.current != null &&
-            (Keyboard.current.tabKey.wasPressedThisFrame || Keyboard.current.escapeKey.wasPressedThisFrame))))
-        {
-            if (Mouse.current != null) lastMousePosition = Mouse.current.position.ReadValue();
+        battle = controller;
+    }
+
+    public bool IsOverSettings(Vector2 cursor)
+    {
+        return Controls.IsOverSettings(cursor, SettingsPanel);
+    }
+
+    private void LateUpdate()
+    {
+        var keyboard = Keyboard.current;
+        var mouse = Mouse.current;
+        Vector2 cursor = mouse == null ? lastMousePosition : mouse.position.ReadValue();
+        Vector2 mouseDelta = cursor - lastMousePosition;
+        lastMousePosition = cursor;
+
+        if (!Application.isFocused || (battle != null && (battle.InventoryOpen || battle.Battle?.Finished == true)) ||
+            (keyboard != null && (keyboard.tabKey.wasPressedThisFrame || keyboard.escapeKey.wasPressedThisFrame)))
             return;
-        }
-        Vector3 keyboard = new Vector3(
-            (Keyboard.current != null && Keyboard.current.dKey.isPressed ? 1f : 0f) - (Keyboard.current != null && Keyboard.current.aKey.isPressed ? 1f : 0f),
-            (Keyboard.current != null && Keyboard.current.wKey.isPressed ? 1f : 0f) - (Keyboard.current != null && Keyboard.current.sKey.isPressed ? 1f : 0f),
-            0f);
-        if (keyboard.sqrMagnitude > 0.001f)
+
+        if (keyboard != null)
         {
-            transform.position += keyboard.normalized * moveSpeed * Time.deltaTime;
+            var direction = new Vector2(
+                (keyboard.dKey.isPressed ? 1 : 0) - (keyboard.aKey.isPressed ? 1 : 0),
+                (keyboard.wKey.isPressed ? 1 : 0) - (keyboard.sKey.isPressed ? 1 : 0));
+            transform.position += (Vector3)(direction.normalized * moveSpeed * Time.deltaTime);
         }
 
-        Camera camera = targetCamera != null ? targetCamera : Camera.main;
-        if (camera == null)
-        {
-            return;
-        }
+        if (mouse == null || IsOverSettings(cursor)) return;
 
-        if (Mouse.current != null && Mouse.current.middleButton.wasPressedThisFrame)
+        bool dragging = mouse.middleButton.isPressed;
+        if (dragging && !mouse.middleButton.wasPressedThisFrame)
         {
-            lastMousePosition = Mouse.current.position.ReadValue();
+            float worldPerPixel = targetCamera.orthographicSize * 2f / Mathf.Max(1, targetCamera.pixelHeight);
+            transform.position -= (Vector3)(mouseDelta * worldPerPixel);
         }
+        UpdateMouseCamera(cursor, mouse.scroll.ReadValue().y, dragging ? 0f : Time.unscaledDeltaTime);
+    }
 
-        if (Mouse.current != null && Mouse.current.middleButton.isPressed)
-        {
-            Vector3 currentMousePosition = Mouse.current.position.ReadValue();
-            Vector3 delta = currentMousePosition - lastMousePosition;
-            float worldPerPixel = camera.orthographicSize * 2f / camera.pixelHeight;
-            transform.position += new Vector3(-delta.x * worldPerPixel, -delta.y * worldPerPixel, 0f);
-            lastMousePosition = currentMousePosition;
-        }
-
-        float scroll = Mouse.current != null ? Mouse.current.scroll.ReadValue().y / 120f : 0f;
-        if (Mathf.Abs(scroll) > 0.001f && camera.orthographic)
-        {
-            camera.orthographicSize = Mathf.Clamp(camera.orthographicSize - scroll * zoomSpeed, 3f, 64f);
-        }
+    private void UpdateMouseCamera(Vector2 cursor, float scroll, float frameTime)
+    {
+        Vector2 zoomOffset = Controls.ZoomAtCursor(cursor, scroll, 3f, 64f);
+        transform.position += (Vector3)(zoomOffset + Controls.EdgeMovement(cursor, frameTime));
     }
 }
